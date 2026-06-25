@@ -11,9 +11,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
         body { font-family: 'Poppins', sans-serif; }
         .gradient-bg { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
-        .card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card:hover { transform: translateY(-5px); }
-        .nav-active { border-bottom: 3px solid #60a5fa; color: white; }
         .upload-zone { transition: all 0.3s ease; }
         .upload-zone.dragover { background-color: #dbeafe; border-color: #3b82f6; }
     </style>
@@ -66,6 +63,7 @@
                            class="w-full px-5 py-4 border border-slate-200 rounded-2xl focus:border-blue-500">
                 </div>
 
+                <!-- Foto Sebelum -->
                 <div>
                     <label class="block text-sm font-medium mb-3">Foto Sebelum</label>
                     <div id="before-upload" class="upload-zone border-2 border-dashed border-slate-300 rounded-3xl p-10 text-center cursor-pointer">
@@ -79,6 +77,7 @@
                     </div>
                 </div>
 
+                <!-- Foto Sesudah -->
                 <div>
                     <label class="block text-sm font-medium mb-3">Foto Sesudah</label>
                     <div id="after-upload" class="upload-zone border-2 border-dashed border-slate-300 rounded-3xl p-10 text-center cursor-pointer">
@@ -104,13 +103,11 @@
     <div id="page-history" class="page hidden">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-3xl font-semibold">Riwayat Piket</h2>
-            <button onclick="loadHistory()" class="text-blue-600 hover:text-blue-700 flex items-center gap-2">
+            <button onclick="loadHistory()" class="text-blue-600 hover:text-blue-700">
                 <i class="fa-solid fa-refresh"></i> Refresh
             </button>
         </div>
-        <div id="history-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Diisi oleh JavaScript -->
-        </div>
+        <div id="history-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
     </div>
 </div>
 
@@ -134,31 +131,36 @@
             data.brands.forEach(b => brandSelect.add(new Option(b, b)));
         } catch (e) {
             console.error(e);
-            alert("Gagal memuat data Mess & Brand");
         }
     }
 
     function setupPhotoUpload() {
-        document.getElementById('before-upload').addEventListener('click', () => document.getElementById('before-file').click());
-        document.getElementById('after-upload').addEventListener('click', () => document.getElementById('after-file').click());
+        document.getElementById('before-upload').onclick = () => document.getElementById('before-file').click();
+        document.getElementById('after-upload').onclick = () => document.getElementById('after-file').click();
 
-        document.getElementById('before-file').addEventListener('change', e => handleFile(e, 'before'));
-        document.getElementById('after-file').addEventListener('change', e => handleFile(e, 'after'));
+        document.getElementById('before-file').onchange = e => handleFile(e, 'before');
+        document.getElementById('after-file').onchange = e => handleFile(e, 'after');
     }
 
     async function handleFile(e, type) {
         const file = e.target.files[0];
-        if (!file || file.size > 8*1024*1024) return alert("Foto maksimal 8MB");
+        if (!file) return;
 
-        const compressed = await compressImage(file);
+        if (file.size > 8 * 1024 * 1024) {
+            alert("Maksimal ukuran foto 8MB");
+            return;
+        }
+
+        const compressedFile = await compressImage(file);
+        
         const reader = new FileReader();
-        reader.onload = ev => {
+        reader.onload = function(ev) {
             if (type === 'before') {
-                beforeFile = compressed;
+                beforeFile = compressedFile;
                 document.getElementById('before-preview').classList.remove('hidden');
                 document.getElementById('before-img').src = ev.target.result;
             } else {
-                afterFile = compressed;
+                afterFile = compressedFile;
                 document.getElementById('after-preview').classList.remove('hidden');
                 document.getElementById('after-img').src = ev.target.result;
             }
@@ -175,23 +177,38 @@
                 if (w > 900) { h = Math.round(h * 900 / w); w = 900; }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                canvas.toBlob(blob => resolve(new File([blob], file.name, {type:'image/jpeg'})), 'image/jpeg', 0.7);
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                }, 'image/jpeg', 0.7);
             };
             img.src = URL.createObjectURL(file);
         });
     }
 
-    function removeBeforePhoto() { beforeFile = null; document.getElementById('before-preview').classList.add('hidden'); }
-    function removeAfterPhoto() { afterFile = null; document.getElementById('after-preview').classList.add('hidden'); }
+    function removeBeforePhoto() {
+        beforeFile = null;
+        document.getElementById('before-preview').classList.add('hidden');
+        document.getElementById('before-file').value = '';
+    }
+
+    function removeAfterPhoto() {
+        afterFile = null;
+        document.getElementById('after-preview').classList.add('hidden');
+        document.getElementById('after-file').value = '';
+    }
 
     async function submitPiket(e) {
         e.preventDefault();
-        const namaMess = document.getElementById('nama-mess').value;
+
+        const namaMess = document.getElementById('nama-mess').value.trim();
         const brand = document.getElementById('brand-select').value;
-        const namaPetugas = document.getElementById('nama-petugas').value;
+        const namaPetugas = document.getElementById('nama-petugas').value.trim();
+
+        console.log("Before File:", beforeFile ? "ADA" : "TIDAK ADA");
+        console.log("After File:", afterFile ? "ADA" : "TIDAK ADA");
 
         if (!namaMess || !namaPetugas || !beforeFile || !afterFile) {
-            return alert("❌ Lengkapi semua data dan kedua foto!");
+            return alert("❌ Mohon lengkapi semua data dan kedua foto!");
         }
 
         const btn = document.getElementById('submit-btn');
@@ -207,24 +224,31 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: "submit",
-                    namaMess, brand: brand || "-", namaPetugas,
-                    beforeBase64: beforeB64, afterBase64: afterB64,
-                    beforeName: beforeFile.name, afterName: afterFile.name
+                    namaMess,
+                    brand: brand || "-",
+                    namaPetugas,
+                    beforeBase64: beforeB64,
+                    afterBase64: afterB64,
+                    beforeName: beforeFile.name,
+                    afterName: afterFile.name
                 })
             });
 
-            const text = await res.text();
-            if (text.includes("Success")) {
-                alert("✅ Berhasil disimpan!");
+            const result = await res.text();
+            console.log("Response:", result);
+
+            if (result.includes("Success")) {
+                alert("✅ Berhasil disimpan ke Google Sheets!");
                 document.getElementById('piket-form').reset();
-                removeBeforePhoto(); removeAfterPhoto();
-                loadHistory(); // refresh riwayat otomatis
+                removeBeforePhoto();
+                removeAfterPhoto();
+                loadHistory();
             } else {
-                alert("❌ Gagal: " + text);
+                alert("❌ Gagal: " + result);
             }
         } catch (err) {
             console.error(err);
-            alert("❌ Kesalahan upload. Cek console (F12)");
+            alert("❌ Terjadi kesalahan saat upload.");
         } finally {
             btn.disabled = false;
             btn.innerHTML = '📤 Kirim Dokumentasi';
@@ -232,17 +256,26 @@
     }
 
     function fileToBase64(file) {
-        return new Promise((res, rej) => {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = () => res(reader.result);
-            reader.onerror = rej;
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
             reader.readAsDataURL(file);
         });
     }
 
+    function addNewBrand() {
+        const brand = prompt("Masukkan nama Brand baru:");
+        if (brand?.trim()) {
+            const select = document.getElementById('brand-select');
+            select.add(new Option(brand.trim(), brand.trim()));
+            select.value = brand.trim();
+        }
+    }
+
     async function loadHistory() {
         const container = document.getElementById('history-grid');
-        container.innerHTML = '<p class="text-center py-10 text-slate-500">Memuat riwayat...</p>';
+        container.innerHTML = '<p class="text-center py-10">Memuat riwayat...</p>';
 
         try {
             const res = await fetch(`${APPS_SCRIPT_URL}?action=getHistory`);
@@ -255,32 +288,23 @@
             }
 
             data.forEach(item => {
-                const card = document.createElement('div');
-                card.className = "card bg-white rounded-3xl overflow-hidden shadow-sm";
-                card.innerHTML = `
-                    <div class="grid grid-cols-2 gap-1 bg-slate-100">
-                        <img src="${item.beforeUrl}" class="h-48 w-full object-cover" alt="Before">
-                        <img src="${item.afterUrl}" class="h-48 w-full object-cover" alt="After">
+                const div = document.createElement('div');
+                div.className = "bg-white rounded-3xl overflow-hidden shadow";
+                div.innerHTML = `
+                    <div class="grid grid-cols-2 gap-1">
+                        <img src="${item.beforeUrl}" class="h-48 w-full object-cover">
+                        <img src="${item.afterUrl}" class="h-48 w-full object-cover">
                     </div>
                     <div class="p-5">
                         <div class="font-semibold">${item.namaMess}</div>
                         <div class="text-sm text-slate-500">${item.brand} • ${item.namaPetugas}</div>
-                        <div class="text-xs text-slate-400 mt-2">${new Date(item.timestamp).toLocaleString('id-ID')}</div>
+                        <div class="text-xs text-slate-400 mt-1">${new Date(item.timestamp).toLocaleString('id-ID')}</div>
                     </div>
                 `;
-                container.appendChild(card);
+                container.appendChild(div);
             });
         } catch (e) {
-            container.innerHTML = '<p class="text-red-500 text-center py-10">Gagal memuat riwayat. Cek koneksi.</p>';
-        }
-    }
-
-    function addNewBrand() {
-        const brand = prompt("Nama Brand baru:");
-        if (brand?.trim()) {
-            const select = document.getElementById('brand-select');
-            select.add(new Option(brand.trim(), brand.trim()));
-            select.value = brand.trim();
+            container.innerHTML = '<p class="text-red-500 text-center py-10">Gagal memuat riwayat</p>';
         }
     }
 
